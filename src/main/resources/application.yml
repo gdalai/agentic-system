@@ -9,6 +9,7 @@ spring:
     open-in-view: false
 
 orchestration:
+  max-concurrent-runs: 2
   max-parallel-tasks: 4
   max-retries: 3
 

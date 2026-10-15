@@ -38,14 +38,42 @@ curl -s -X POST localhost:8080/api/v1/urls \
   -d '{"targetUrl":"https://example.com"}'
 ```
 
-## Orchestration core (in progress)
+## Workflow API
 
-`orchestration/` holds the framework-free engine core:
+| Method | Path | Result |
+|---|---|---|
+| POST | `/api/v1/workflows` | 202 + `runId`; the run executes in the background |
+| GET | `/api/v1/workflows/{runId}` | run status and progress |
+| GET | `/api/v1/workflows/{runId}/tasks` | each task's status, attempts, outputs, errors |
+| GET | `/api/v1/workflows/{runId}/events` | ordered audit trail of every transition and agent result |
 
-- `TaskGraph` validates the DAG at construction (Kahn's algorithm rejects cycles and unknown dependencies), returns ready tasks, and computes downstream impact for replanning.
-- `RunStateMachine` is the single source of truth for legal task status transitions.
+```bash
+RUN=$(curl -s -X POST localhost:8080/api/v1/workflows -H 'Content-Type: application/json' -d '{
+  "scenario": "GREENFIELD",
+  "requirement": "Build a URL shortener with expiration and click analytics.",
+  "autonomyLevel": "CONTROLLED",
+  "approvalRequiredFor": ["CODE_MERGE", "RELEASE"]
+}' | jq -r .runId)
 
-Next steps are the workflow engine, agents, governance, audit, AI adapter and scenarios.
+curl -s localhost:8080/api/v1/workflows/$RUN | jq
+curl -s localhost:8080/api/v1/workflows/$RUN/tasks | jq
+curl -s localhost:8080/api/v1/workflows/$RUN/events | jq
+```
+
+## How the engine works
+
+```
+requirements -> architecture -> implementation --> test -> documentation
+                             \-> security -------/
+```
+
+- `WorkflowPlanner` turns a scenario into a `TaskGraph`. Construction validates the DAG (cycles and unknown dependencies are rejected).
+- `GraphRunner` is the framework-free execution loop. It runs ready tasks, moves every status through `RunStateMachine`, and marks tasks behind a failure as `BLOCKED`. A run succeeds only if every task succeeded.
+- Agents (`agent/`) implement one `EngineeringAgent` contract. They receive an immutable `AgentContext` with upstream outputs and return an `AgentResult` as evidence. They never change workflow state themselves.
+- `WorkflowService` persists each run, task and transition as it happens (`workflow_run`, `task_execution`, `run_event`), so progress is visible while a run executes.
+- `FaultInjector` makes the next N executions of an agent type fail, for demonstrating failure handling.
+
+Next: parallel execution, policy and approval gates, retries, rollback, replanning, metrics, AI adapter, scenarios.
 
 ## Project layout
 

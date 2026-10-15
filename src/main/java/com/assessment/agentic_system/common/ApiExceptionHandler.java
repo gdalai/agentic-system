@@ -1,5 +1,6 @@
 package com.assessment.agentic_system.common;
 
+import com.assessment.agentic_system.orchestration.WorkflowNotFoundException;
 import com.assessment.agentic_system.shortener.CodeGenerator.CodeGenerationException;
 import com.assessment.agentic_system.shortener.UrlExceptions.UrlExpiredException;
 import com.assessment.agentic_system.shortener.UrlExceptions.UrlNotFoundException;
@@ -18,6 +19,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(UrlNotFoundException.class)
     public ProblemDetail notFound(UrlNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Not found", ex.getMessage());
+    }
+
+    @ExceptionHandler(WorkflowNotFoundException.class)
+    public ProblemDetail workflowNotFound(WorkflowNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Not found", ex.getMessage());
     }
 
