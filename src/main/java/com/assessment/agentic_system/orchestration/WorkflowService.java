@@ -216,8 +216,8 @@ public class WorkflowService {
             RunStatus outcome = runner.run(graph, prior,
                     (node, completed) -> agents.get(node.agentType()).execute(new AgentContext(
                             runId, node.id(), run.getRequirement(), run.getRequirementVersion(), completed)),
-                    node -> policy.approvalReason(run.getAutonomyLevel(), run.getApprovalRequiredFor(),
-                            node.id(), node.agentType()),
+                    (node, dependencyOutputs) -> policy.approvalReason(run.getScenario(), run.getAutonomyLevel(),
+                            run.getApprovalRequiredFor(), node.id(), node.agentType(), dependencyOutputs),
                     new PersistingListener(runId));
 
             switch (outcome) {

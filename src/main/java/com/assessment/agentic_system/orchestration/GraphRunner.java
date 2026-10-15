@@ -37,12 +37,15 @@ public final class GraphRunner {
         AgentResult execute(TaskNode node, Map<String, Map<String, String>> completedOutputs);
     }
 
-    /** Decides whether a task needs a human decision before it runs. Returns the reason, or null. */
+    /**
+     * Decides whether a task needs a human decision before it runs. Receives the outputs of the
+     * task's direct dependencies, so decisions can depend on upstream evidence. Returns the reason, or null.
+     */
     @FunctionalInterface
     public interface ApprovalGate {
-        ApprovalGate NONE = node -> null;
+        ApprovalGate NONE = (node, dependencyOutputs) -> null;
 
-        String approvalReason(TaskNode node);
+        String approvalReason(TaskNode node, Map<String, Map<String, String>> dependencyOutputs);
     }
 
     /** Observes the run. Always called on the runner thread, in order. */
@@ -85,7 +88,11 @@ public final class GraphRunner {
             // 1. Promote tasks whose dependencies are met; park those that need approval.
             for (TaskNode node : graph.readyTasks()) {
                 move(graph, node, TaskStatus.READY, "dependencies satisfied", listener);
-                String reason = gate.approvalReason(node);
+                Map<String, Map<String, String>> dependencyOutputs = new LinkedHashMap<>();
+                for (String dep : node.dependsOn()) {
+                    dependencyOutputs.put(dep, outputs.getOrDefault(dep, Map.of()));
+                }
+                String reason = gate.approvalReason(node, dependencyOutputs);
                 if (reason != null) {
                     move(graph, node, TaskStatus.AWAITING_APPROVAL, reason, listener);
                 }

@@ -62,7 +62,7 @@ class WorkflowApiIntegrationTest {
         String tasks = getJson("/api/v1/workflows/{id}/tasks", runId);
         assertThat(JsonPath.<List<String>>read(tasks, "$[*].status")).containsOnly("SUCCEEDED");
         assertThat(JsonPath.<List<String>>read(tasks, "$[?(@.taskId=='test')].outputs.testsPassed"))
-                .containsExactly("12");
+                .containsExactly("20"); // 5 acceptance criteria x 4 tests each
 
         String events = getJson("/api/v1/workflows/{id}/events", runId);
         List<String> types = JsonPath.read(events, "$[*].eventType");
@@ -182,6 +182,86 @@ class WorkflowApiIntegrationTest {
         decide(runId, "implementation", "APPROVE", "tech-lead").andExpect(status().isConflict());
     }
 
+    // ------------------------------------------------------------------ scenarios
+
+    @Test
+    void ambiguousRequirementPausesAtDecisionGateAndClarificationReplansIt() throws Exception {
+        String runId = startRun("AMBIGUOUS", "AUTONOMOUS", List.of(),
+                "Build a fast, scalable URL shortener with analytics etc.");
+
+        // Even in AUTONOMOUS mode, the AMBIGUOUS scenario stops for a human decision.
+        awaitStatus(runId, "AWAITING_APPROVAL");
+        getTasks(runId)
+                .andExpect(jsonPath("$[?(@.taskId=='requirements')].status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$[?(@.taskId=='requirements')].outputs.ambiguityCount").value("3"))
+                .andExpect(jsonPath("$[?(@.taskId=='architecture')].status").value("AWAITING_APPROVAL"))
+                .andExpect(jsonPath("$[?(@.taskId=='implementation')].status").value("PENDING"));
+        String events = getJson("/api/v1/workflows/{id}/events", runId);
+        List<String> gateReasons = JsonPath.read(events,
+                "$[?(@.taskId=='architecture' && @.toStatus=='AWAITING_APPROVAL')].detail");
+        assertThat(gateReasons).singleElement().asString().startsWith("Decision gate").contains("fast");
+
+        mvc.perform(post("/api/v1/workflows/{id}/replan", runId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requirement":"Build a URL shortener; links expire after 30 days; redirects respond within 50 ms; analytics count unique visitors per day.",
+                                 "reason":"Product owner clarified performance and analytics"}
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.requirementVersion").value(2));
+
+        awaitStatus(runId, "SUCCEEDED");
+        getTasks(runId)
+                .andExpect(jsonPath("$[?(@.taskId=='requirements')].outputs.ambiguityCount").value("0"))
+                .andExpect(jsonPath("$[?(@.taskId=='requirements')].outputs.requirementVersion").value("2"));
+    }
+
+    @Test
+    void ambiguousRequirementCanProceedOnRecordedAssumptions() throws Exception {
+        String runId = startRun("AMBIGUOUS", "AUTONOMOUS", List.of(),
+                "Build a fast, scalable URL shortener with analytics etc.");
+        awaitStatus(runId, "AWAITING_APPROVAL");
+
+        decide(runId, "architecture", "APPROVE", "tech-lead").andExpect(status().isAccepted());
+
+        awaitStatus(runId, "SUCCEEDED");
+        List<String> summary = JsonPath.read(getJson("/api/v1/workflows/{id}/tasks", runId),
+                "$[?(@.taskId=='documentation')].outputs.engineeringSummary");
+        assertThat(summary).singleElement().asString().contains("proceeded on assumptions").contains("100 ms");
+    }
+
+    @Test
+    void brownfieldDefectIsReproducedFixedWithinBoundsAndRegressionTested() throws Exception {
+        String runId = startRun("BROWNFIELD", "AUTONOMOUS", List.of(),
+                "Fix defect: expired short links still redirect at the exact expiry time");
+
+        String finalState = awaitStatus(runId, "SUCCEEDED");
+
+        assertThat(JsonPath.<Integer>read(finalState, "$.tasksTotal")).isEqualTo(7);
+        getTasks(runId)
+                .andExpect(jsonPath("$[?(@.taskId=='impact')].outputs.impactedFiles")
+                        .value("ShortUrl | UrlService | UrlController"))
+                .andExpect(jsonPath("$[?(@.taskId=='reproduce')].outputs.resultBeforeFix").value("FAILED"))
+                .andExpect(jsonPath("$[?(@.taskId=='implementation')].outputs.scope").value("bounded"))
+                .andExpect(jsonPath("$[?(@.taskId=='test')].outputs.reproductionTestPassing").value("true"));
+
+        List<String> started = JsonPath.read(getJson("/api/v1/workflows/{id}/events", runId),
+                "$[?(@.eventType=='TASK_TRANSITION' && @.toStatus=='SUCCEEDED')].taskId");
+        assertThat(started.indexOf("reproduce")).isLessThan(started.indexOf("implementation"));
+    }
+
+    @Test
+    void brownfieldDefectThatMatchesNoKnownCodeFailsWithoutRetrying() throws Exception {
+        String runId = startRun("BROWNFIELD", "AUTONOMOUS", List.of(), "Fix defect: the logo is the wrong shade of blue");
+
+        awaitStatus(runId, "FAILED");
+
+        getTasks(runId)
+                .andExpect(jsonPath("$[?(@.taskId=='impact')].status").value("FAILED"))
+                .andExpect(jsonPath("$[?(@.taskId=='impact')].attempts").value(1))
+                .andExpect(jsonPath("$[?(@.taskId=='reproduce')].status").value("BLOCKED"));
+    }
+
     // ------------------------------------------------------------------ API edges and metrics
 
     @Test
@@ -216,6 +296,11 @@ class WorkflowApiIntegrationTest {
     }
 
     private String startRun(String scenario, String autonomy, List<String> approvalRequiredFor) throws Exception {
+        return startRun(scenario, autonomy, approvalRequiredFor, REQUIREMENT);
+    }
+
+    private String startRun(String scenario, String autonomy, List<String> approvalRequiredFor, String requirement)
+            throws Exception {
         String approvals = approvalRequiredFor.stream().map(a -> "\"" + a + "\"")
                 .reduce((a, b) -> a + "," + b).orElse("");
         String body = mvc.perform(post("/api/v1/workflows")
@@ -223,10 +308,10 @@ class WorkflowApiIntegrationTest {
                         .content("""
                                 {"scenario":"%s","requirement":"%s",
                                  "autonomyLevel":"%s","approvalRequiredFor":[%s]}
-                                """.formatted(scenario, REQUIREMENT, autonomy, approvals)))
+                                """.formatted(scenario, requirement, autonomy, approvals)))
                 .andExpect(status().isAccepted())
                 .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$.tasksTotal").value(6))
+                .andExpect(jsonPath("$.tasksTotal").value(scenario.equals("BROWNFIELD") ? 7 : 6))
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.runId");
     }

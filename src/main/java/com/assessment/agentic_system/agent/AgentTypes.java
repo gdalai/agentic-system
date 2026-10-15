@@ -9,6 +9,8 @@ public final class AgentTypes {
     public static final String SECURITY = "SECURITY";
     public static final String TEST = "TEST";
     public static final String DOCUMENTATION = "DOCUMENTATION";
+    public static final String IMPACT_ANALYSIS = "IMPACT_ANALYSIS";
+    public static final String DEFECT_REPRODUCTION = "DEFECT_REPRODUCTION";
 
     private AgentTypes() {
     }

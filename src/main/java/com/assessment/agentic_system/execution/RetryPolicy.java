@@ -13,7 +13,8 @@ import java.util.Set;
  */
 public record RetryPolicy(int maxRetries, long initialBackoffMs, double multiplier, Set<String> nonRetryableCodes) {
 
-    public static final Set<String> DEFAULT_NON_RETRYABLE = Set.of("POLICY_DENIED", "VALIDATION_FAILED", "NULL_RESULT");
+    public static final Set<String> DEFAULT_NON_RETRYABLE =
+            Set.of("POLICY_DENIED", "VALIDATION_FAILED", "NULL_RESULT", "IMPACT_UNKNOWN");
 
     public RetryPolicy {
         if (maxRetries < 0 || initialBackoffMs < 0 || multiplier < 1.0) {

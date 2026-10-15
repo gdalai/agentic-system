@@ -200,7 +200,7 @@ class GraphRunnerTest {
     @Test
     void approvalGatePausesTheRunAndOtherBranchesContinue() {
         TaskGraph graph = plan();
-        ApprovalGate gate = node -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
+        ApprovalGate gate = (node, deps) -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
 
         RunStatus outcome = runner().run(graph, PriorState.empty(), (node, done) -> ok(node), gate, listener);
 
@@ -214,7 +214,7 @@ class GraphRunnerTest {
     @Test
     void approvedTaskRunsWhenResumedWithoutAskingAgain() {
         TaskGraph graph = plan();
-        ApprovalGate gate = node -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
+        ApprovalGate gate = (node, deps) -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
         GraphRunner runner = runner();
         runner.run(graph, PriorState.empty(), (node, done) -> ok(node), gate, listener);
 
@@ -232,7 +232,7 @@ class GraphRunnerTest {
     @Test
     void rejectedApprovalCancelsTheRunAndBlocksDownstream() {
         TaskGraph graph = plan();
-        ApprovalGate gate = node -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
+        ApprovalGate gate = (node, deps) -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
         GraphRunner runner = runner();
         runner.run(graph, PriorState.empty(), (node, done) -> ok(node), gate, listener);
 
@@ -247,7 +247,7 @@ class GraphRunnerTest {
     @Test
     void failureElsewhereCancelsPendingApprovals() {
         TaskGraph graph = plan();
-        ApprovalGate gate = node -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
+        ApprovalGate gate = (node, deps) -> node.id().equals("implementation") ? "CODE_MERGE requires approval" : null;
 
         RunStatus outcome = runner().run(graph, PriorState.empty(), (node, done) -> node.id().equals("security")
                 ? AgentResult.failure("SCAN_FAILED", "scanner unavailable") : ok(node), gate, listener);

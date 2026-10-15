@@ -97,7 +97,56 @@ curl -s -X POST localhost:8080/api/v1/workflows/$RUN/approvals -H 'Content-Type:
   -d '{"taskId":"implementation","decision":"APPROVE","approver":"tech-lead","reason":"design reviewed"}'
 ```
 
-Next: AI adapter with a deterministic mock, scenario-specific plans (brownfield, ambiguous), Docker image, architecture docs.
+## Scenarios
+
+All three run on the same engine; they differ in plan and in the decisions the policy requires.
+
+```
+GREENFIELD / AMBIGUOUS
+  requirements -> architecture -> implementation --> test -> documentation
+                               \-> security -------/
+BROWNFIELD
+  requirements -> impact -> reproduce -> implementation --> test -> documentation
+                         \-> security -----------------/
+```
+
+| Scenario | What happens |
+|---|---|
+| `GREENFIELD` | Requirement analysis produces acceptance criteria; design, parallel implementation and security review, tests, engineering summary. |
+| `BROWNFIELD` | Impact analysis maps the defect onto this repo's URL shortener (classes, files, test suites), a failing reproduction test is written before any fix, the fix must stay within 3 files, and the reproduction test plus impacted regression suites must pass. An unknown defect fails fast without retries. |
+| `AMBIGUOUS` | If requirement analysis finds vague or open-ended wording, the run stops at a **decision gate** before architecture, even in `AUTONOMOUS` mode. A human either approves (proceed on the recorded assumptions, which the summary then lists) or replans with a clarified requirement (v2), which re-runs from requirements. |
+
+```bash
+# ambiguous: pauses at the decision gate
+curl -s -X POST localhost:8080/api/v1/workflows -H 'Content-Type: application/json' -d '{
+  "scenario":"AMBIGUOUS","autonomyLevel":"AUTONOMOUS",
+  "requirement":"Build a fast, scalable URL shortener with analytics etc."}'
+
+# clarify instead of accepting assumptions
+curl -s -X POST localhost:8080/api/v1/workflows/$RUN/replan -H 'Content-Type: application/json' -d '{
+  "requirement":"Build a URL shortener; links expire after 30 days; redirects respond within 50 ms; analytics count unique visitors per day.",
+  "reason":"Product owner clarified"}'
+
+# brownfield defect
+curl -s -X POST localhost:8080/api/v1/workflows -H 'Content-Type: application/json' -d '{
+  "scenario":"BROWNFIELD","autonomyLevel":"AUTONOMOUS",
+  "requirement":"Fix defect: expired short links still redirect at the exact expiry time"}'
+```
+
+## AI integration
+
+The Requirement agent is model-backed through `LlmClient`:
+
+- `ai.provider=mock` (default): `MockLlmClient` answers with deterministic, rule-based output in the same line format a real model is asked for. CI and tests need no credentials.
+- `ai.provider=anthropic`: `AnthropicLlmClient` calls the Claude Messages API using Spring's `RestClient` (no extra dependency). Set `ANTHROPIC_API_KEY`; optionally `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`). Startup fails fast if the key is missing.
+
+```bash
+AI_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-... ./mvnw spring-boot:run
+```
+
+The model only recommends. `RequirementAnalyzer` owns the prompt, parses `CRITERION / AMBIGUITY / ASSUMPTION` lines and rejects replies without criteria. A provider outage maps to `LLM_UNAVAILABLE` (retried with backoff); unusable output maps to `VALIDATION_FAILED` (not retried). Whether ambiguities block the run is decided by `PolicyEngine`, not by the model. Graph validation, dependency readiness, retries, approvals and rollback stay deterministic.
+
+Next: Dockerfile and compose app service, architecture / security / testing docs, demo script.
 
 ## Project layout
 
