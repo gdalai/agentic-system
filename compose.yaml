@@ -1,3 +1,5 @@
+# Full local stack:  docker compose up --build
+# Database only:     docker compose up -d postgres   (then ./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres)
 services:
   postgres:
     image: postgres:16
@@ -12,3 +14,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/agentic
+      SPRING_DATASOURCE_USERNAME: agentic
+      SPRING_DATASOURCE_PASSWORD: agentic
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      # Opt-in endpoint used by scripts/demo.sh to show retries and rollback live.
+      ORCHESTRATION_DEMO_FAULT_INJECTION_ENABLED: ${DEMO_FAULT_INJECTION:-true}
+    ports:
+      - "8080:8080"

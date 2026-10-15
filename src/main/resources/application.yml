@@ -16,6 +16,8 @@ orchestration:
     initial-backoff-ms: 200
     multiplier: 2.0
   approvers: tech-lead,release-manager
+  demo:
+    fault-injection-enabled: false   # opt-in; enabled in the local profile and by compose for demos
 
 ai:
   provider: ${AI_PROVIDER:mock}          # mock | anthropic
@@ -43,6 +45,9 @@ spring:
   h2:
     console:
       enabled: true
+orchestration:
+  demo:
+    fault-injection-enabled: true
 
 ---
 # Real PostgreSQL via `docker compose up -d` and --spring.profiles.active=postgres

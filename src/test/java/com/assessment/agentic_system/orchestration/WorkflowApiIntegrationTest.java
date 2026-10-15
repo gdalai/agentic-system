@@ -262,6 +262,25 @@ class WorkflowApiIntegrationTest {
                 .andExpect(jsonPath("$[?(@.taskId=='reproduce')].status").value("BLOCKED"));
     }
 
+    @Test
+    void demoFaultEndpointDrivesRetryExhaustionThroughTheApi() throws Exception {
+        mvc.perform(post("/api/v1/demo/faults")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agentType\":\"SECURITY\",\"times\":10}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/demo/faults")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"agentType\":\"DEPLOY\",\"times\":1}"))
+                .andExpect(status().isBadRequest());
+
+        String runId = startRun("AUTONOMOUS", List.of());
+
+        awaitStatus(runId, "FAILED");
+        getTasks(runId)
+                .andExpect(jsonPath("$[?(@.taskId=='security')].attempts").value(4))
+                .andExpect(jsonPath("$[?(@.taskId=='implementation')].status").value("ROLLED_BACK"));
+    }
+
     // ------------------------------------------------------------------ API edges and metrics
 
     @Test
