@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: agentic-system
+  profiles:
+    default: local
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema; Hibernate only checks it
+    open-in-view: false
+
+orchestration:
+  max-parallel-tasks: 4
+  max-retries: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+---
+# Default: in-memory H2 in PostgreSQL mode. No Docker needed for dev or CI.
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:agentic;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+
+---
+# Real PostgreSQL via `docker compose up -d` and --spring.profiles.active=postgres
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: jdbc:postgresql://localhost:5432/agentic
+    username: agentic
+    password: agentic
