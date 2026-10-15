@@ -133,7 +133,7 @@ class WorkflowApiIntegrationTest {
 
     @Test
     void rejectedApprovalCancelsRunAndReplanWithClarifiedRequirementCompletesIt() throws Exception {
-        String runId = startRun("AMBIGUOUS", List.of("CODE_MERGE"));
+        String runId = startRun("AMBIGUOUS", "CONTROLLED", List.of("CODE_MERGE"));
         awaitStatus(runId, "AWAITING_APPROVAL");
 
         decide(runId, "implementation", "REJECT", "tech-lead").andExpect(status().isAccepted());
@@ -212,14 +212,18 @@ class WorkflowApiIntegrationTest {
     // ------------------------------------------------------------------ helpers
 
     private String startRun(String autonomy, List<String> approvalRequiredFor) throws Exception {
+        return startRun("GREENFIELD", autonomy, approvalRequiredFor);
+    }
+
+    private String startRun(String scenario, String autonomy, List<String> approvalRequiredFor) throws Exception {
         String approvals = approvalRequiredFor.stream().map(a -> "\"" + a + "\"")
                 .reduce((a, b) -> a + "," + b).orElse("");
         String body = mvc.perform(post("/api/v1/workflows")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"scenario":"GREENFIELD","requirement":"%s",
+                                {"scenario":"%s","requirement":"%s",
                                  "autonomyLevel":"%s","approvalRequiredFor":[%s]}
-                                """.formatted(REQUIREMENT, autonomy, approvals)))
+                                """.formatted(scenario, REQUIREMENT, autonomy, approvals)))
                 .andExpect(status().isAccepted())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$.tasksTotal").value(6))
