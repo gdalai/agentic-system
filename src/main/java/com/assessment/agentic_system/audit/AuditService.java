@@ -20,6 +20,10 @@ public class AuditService {
         events.save(new RunEvent(runId, null, type, null, null, detail, clock.instant()));
     }
 
+    public void taskEvent(UUID runId, String taskId, RunEventType type, String detail) {
+        events.save(new RunEvent(runId, taskId, type, null, null, detail, clock.instant()));
+    }
+
     public void taskTransition(UUID runId, String taskId, Enum<?> from, Enum<?> to, String detail) {
         events.save(new RunEvent(runId, taskId, RunEventType.TASK_TRANSITION,
                 from == null ? null : from.name(), to == null ? null : to.name(), detail, clock.instant()));

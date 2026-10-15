@@ -70,6 +70,13 @@ public class WorkflowRun {
         this.updatedAt = now;
     }
 
+    /** Records a new requirement version. The engine then invalidates and re-runs impacted tasks. */
+    public void replan(String newRequirement, Instant now) {
+        this.requirement = newRequirement;
+        this.requirementVersion++;
+        this.updatedAt = now;
+    }
+
     public void changeStatus(RunStatus next, Instant now) {
         this.status = next;
         this.updatedAt = now;

@@ -25,7 +25,9 @@ class RunStateMachineTest {
             "RUNNING, FAILED",
             "FAILED, ROLLED_BACK",
             "SUCCEEDED, PENDING",
-            "ROLLED_BACK, PENDING"
+            "ROLLED_BACK, PENDING",
+            "AWAITING_APPROVAL, PENDING",
+            "CANCELLED, PENDING"
     })
     void allowsLegalTransitions(TaskStatus from, TaskStatus to) {
         assertThat(RunStateMachine.transition("t", from, to)).isEqualTo(to);
@@ -39,7 +41,8 @@ class RunStateMachineTest {
             "AWAITING_APPROVAL, RUNNING",
             "SUCCEEDED, RUNNING",
             "FAILED, SUCCEEDED",
-            "CANCELLED, PENDING",
+            "CANCELLED, READY",
+            "CANCELLED, RUNNING",
             "ROLLED_BACK, SUCCEEDED"
     })
     void rejectsIllegalTransitions(TaskStatus from, TaskStatus to) {
@@ -66,8 +69,8 @@ class RunStateMachineTest {
     }
 
     @Test
-    void cancelledIsTerminal() {
-        assertThat(RunStateMachine.allowedFrom(TaskStatus.CANCELLED)).isEmpty();
+    void cancelledCanOnlyBeRevivedByReplanning() {
+        assertThat(RunStateMachine.allowedFrom(TaskStatus.CANCELLED)).containsExactly(TaskStatus.PENDING);
     }
 
     @Test

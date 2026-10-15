@@ -46,6 +46,12 @@ public final class TaskNode {
         }
     }
 
+    /** Rebuilds state from persistence without replaying transitions. Only TaskGraph may call this. */
+    void restore(TaskStatus persistedStatus, int persistedAttempts) {
+        this.status = persistedStatus;
+        this.attempts = persistedAttempts;
+    }
+
     @Override
     public String toString() {
         return id + "[" + agentType + ", " + status + "]";

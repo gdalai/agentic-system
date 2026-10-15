@@ -2,6 +2,7 @@ package com.assessment.agentic_system.orchestration.api;
 
 import com.assessment.agentic_system.audit.RunEvent;
 import com.assessment.agentic_system.common.JsonCodec;
+import com.assessment.agentic_system.orchestration.ApprovalDecision;
 import com.assessment.agentic_system.orchestration.AutonomyLevel;
 import com.assessment.agentic_system.orchestration.RunStatus;
 import com.assessment.agentic_system.orchestration.Scenario;
@@ -33,6 +34,19 @@ public final class WorkflowDtos {
         }
     }
 
+    public record ApprovalRequest(
+            @NotBlank String taskId,
+            @NotNull ApprovalDecision decision,
+            @NotBlank String approver,
+            @Size(max = 500) String reason) {
+    }
+
+    public record ReplanRequest(
+            @NotBlank @Size(max = 4000) String requirement,
+            String fromTaskId,
+            @Size(max = 500) String reason) {
+    }
+
     public record WorkflowRunView(
             UUID runId,
             Scenario scenario,
@@ -61,13 +75,15 @@ public final class WorkflowDtos {
             TaskStatus status,
             int attempts,
             Map<String, String> outputs,
+            List<String> artifacts,
             String error,
             Instant startedAt,
             Instant finishedAt) {
 
         static TaskView from(TaskExecution t) {
             return new TaskView(t.getTaskId(), t.getAgentType(), t.getDependsOn(), t.getStatus(), t.getAttempts(),
-                    JsonCodec.decode(t.getOutputs()), t.getError(), t.getStartedAt(), t.getFinishedAt());
+                    JsonCodec.decode(t.getOutputs()), t.getArtifacts(), t.getError(), t.getStartedAt(),
+                    t.getFinishedAt());
         }
     }
 

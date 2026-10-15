@@ -29,15 +29,18 @@ public final class RunStateMachine {
     static {
         allow(PENDING, READY, BLOCKED, CANCELLED);
         allow(READY, RUNNING, AWAITING_APPROVAL, CANCELLED);
-        allow(AWAITING_APPROVAL, READY, CANCELLED);
+        // Approve -> READY; reject or run failure -> CANCELLED; replan supersedes the gate -> PENDING.
+        allow(AWAITING_APPROVAL, READY, CANCELLED, PENDING);
         allow(RUNNING, SUCCEEDED, FAILED, RETRYING, CANCELLED);
         allow(RETRYING, RUNNING, FAILED, CANCELLED);
-        // Replanning can send finished work back to PENDING; failed work can be rolled back.
+        // Replanning can send any finished or stopped work back to PENDING. A succeeded task's
+        // staged changes can be rolled back when the run fails.
         allow(SUCCEEDED, PENDING, ROLLED_BACK);
         allow(FAILED, PENDING, ROLLED_BACK, CANCELLED);
         allow(BLOCKED, PENDING, CANCELLED);
         allow(ROLLED_BACK, PENDING);
-        allow(CANCELLED);
+        // CANCELLED is final for the current plan; only an explicit replan revives it.
+        allow(CANCELLED, PENDING);
     }
 
     private RunStateMachine() {

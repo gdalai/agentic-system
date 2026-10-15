@@ -45,7 +45,10 @@ curl -s -X POST localhost:8080/api/v1/urls \
 | POST | `/api/v1/workflows` | 202 + `runId`; the run executes in the background |
 | GET | `/api/v1/workflows/{runId}` | run status and progress |
 | GET | `/api/v1/workflows/{runId}/tasks` | each task's status, attempts, outputs, errors |
-| GET | `/api/v1/workflows/{runId}/events` | ordered audit trail of every transition and agent result |
+| GET | `/api/v1/workflows/{runId}/events` | ordered audit trail of every transition, decision and agent result |
+| POST | `/api/v1/workflows/{runId}/approvals` | approve or reject a task at an approval gate (`taskId`, `decision`, `approver`, `reason`) |
+| POST | `/api/v1/workflows/{runId}/replan` | new requirement version; re-runs only invalidated tasks (`requirement`, optional `fromTaskId`, `reason`) |
+| GET | `/api/v1/metrics` | runs by status, success rate, retries, recoveries, rollbacks, approvals, replans, latency |
 
 ```bash
 RUN=$(curl -s -X POST localhost:8080/api/v1/workflows -H 'Content-Type: application/json' -d '{
@@ -68,12 +71,33 @@ requirements -> architecture -> implementation --> test -> documentation
 ```
 
 - `WorkflowPlanner` turns a scenario into a `TaskGraph`. Construction validates the DAG (cycles and unknown dependencies are rejected).
-- `GraphRunner` is the framework-free execution loop. It runs ready tasks, moves every status through `RunStateMachine`, and marks tasks behind a failure as `BLOCKED`. A run succeeds only if every task succeeded.
+- `GraphRunner` is the framework-free execution loop:
+  - **Parallel:** independent tasks (`implementation`, `security`) run concurrently on a bounded agent pool, capped by `orchestration.max-parallel-tasks`.
+  - **Single writer:** only the runner thread changes the graph; agents run on workers and return results, so no workflow state is shared across threads.
+  - **Retries:** retryable failures are retried with exponential backoff (`orchestration.max-retries`, `orchestration.retry.*`). Policy and validation failures are not retried.
+  - **Approval gates:** tasks flagged by the policy wait in `AWAITING_APPROVAL`. Other branches keep running; the run pauses only when nothing else can progress.
+  - **Rollback:** when a run fails or is cancelled, succeeded tasks with staged changes (`staging/...`) are rolled back, tasks behind the failure are `BLOCKED`, and open approvals are `CANCELLED`.
+  - Every status change goes through `RunStateMachine`. A run succeeds only if every task succeeded.
+- `PolicyEngine` maps each agent to a governed action (`CODE_MERGE`, `RELEASE`, ...). `MANUAL` gates every task, `CONTROLLED` gates the actions in `approvalRequiredFor`, `AUTONOMOUS` gates none.
+- `ApproverPolicy` restricts who may decide (`orchestration.approvers`). Others get 403.
+- Replanning records requirement v(n+1) and re-runs only the changed task and everything downstream of it, plus anything that did not complete. Upstream results are kept.
 - Agents (`agent/`) implement one `EngineeringAgent` contract. They receive an immutable `AgentContext` with upstream outputs and return an `AgentResult` as evidence. They never change workflow state themselves.
-- `WorkflowService` persists each run, task and transition as it happens (`workflow_run`, `task_execution`, `run_event`), so progress is visible while a run executes.
-- `FaultInjector` makes the next N executions of an agent type fail, for demonstrating failure handling.
+- `WorkflowService` persists each run, task and transition as it happens. Paused runs are resumed by rebuilding the graph from the database, so they survive a restart.
+- `FaultInjector` makes the next N executions of an agent type fail, to demonstrate retries and rollback.
 
-Next: parallel execution, policy and approval gates, retries, rollback, replanning, metrics, AI adapter, scenarios.
+Approval example:
+
+```bash
+# start with CODE_MERGE gated; the run pauses at implementation
+curl -s -X POST localhost:8080/api/v1/workflows -H 'Content-Type: application/json' -d '{
+  "scenario":"GREENFIELD","requirement":"Build a URL shortener","autonomyLevel":"CONTROLLED",
+  "approvalRequiredFor":["CODE_MERGE"]}'
+
+curl -s -X POST localhost:8080/api/v1/workflows/$RUN/approvals -H 'Content-Type: application/json' \
+  -d '{"taskId":"implementation","decision":"APPROVE","approver":"tech-lead","reason":"design reviewed"}'
+```
+
+Next: AI adapter with a deterministic mock, scenario-specific plans (brownfield, ambiguous), Docker image, architecture docs.
 
 ## Project layout
 

@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -53,6 +54,9 @@ public class TaskExecution {
     @Column(length = 1000)
     private String error;
 
+    @Column(length = 2000)
+    private String artifacts;
+
     @Column(name = "started_at")
     private Instant startedAt;
 
@@ -77,15 +81,39 @@ public class TaskExecution {
         if (next == TaskStatus.RUNNING && startedAt == null) {
             startedAt = now;
         }
+        if (next == TaskStatus.PENDING || next == TaskStatus.READY || next == TaskStatus.RUNNING
+                || next == TaskStatus.RETRYING || next == TaskStatus.AWAITING_APPROVAL) {
+            finishedAt = null;
+        }
         if (next == TaskStatus.SUCCEEDED || next == TaskStatus.FAILED || next == TaskStatus.BLOCKED
                 || next == TaskStatus.CANCELLED || next == TaskStatus.ROLLED_BACK) {
             finishedAt = now;
         }
     }
 
-    public void recordOutputs(String outputsJson, String error) {
+    public void recordResult(String outputsJson, List<String> producedArtifacts, String error) {
         this.outputs = outputsJson;
+        String joined = producedArtifacts == null || producedArtifacts.isEmpty() ? null : String.join(",", producedArtifacts);
+        this.artifacts = joined == null || joined.length() <= 2000 ? joined : joined.substring(0, 2000);
         this.error = error == null || error.length() <= 1000 ? error : error.substring(0, 1000);
+    }
+
+    /** Back to a clean PENDING state for a replan. The transition itself is validated by the graph. */
+    public void resetForReplan() {
+        this.status = TaskStatus.PENDING;
+        this.attempts = 0;
+        this.outputs = null;
+        this.artifacts = null;
+        this.error = null;
+        this.startedAt = null;
+        this.finishedAt = null;
+    }
+
+    public List<String> getArtifacts() {
+        if (artifacts == null || artifacts.isBlank()) {
+            return List.of();
+        }
+        return List.of(artifacts.split(","));
     }
 
     public Long getId() { return id; }

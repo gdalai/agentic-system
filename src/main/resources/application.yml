@@ -12,6 +12,10 @@ orchestration:
   max-concurrent-runs: 2
   max-parallel-tasks: 4
   max-retries: 3
+  retry:
+    initial-backoff-ms: 200
+    multiplier: 2.0
+  approvers: tech-lead,release-manager
 
 management:
   endpoints:

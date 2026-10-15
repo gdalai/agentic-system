@@ -7,5 +7,10 @@ public enum RunStatus {
     AWAITING_APPROVAL,
     SUCCEEDED,
     FAILED,
-    CANCELLED
+    CANCELLED;
+
+    /** Finished for the current plan; may still be replanned. */
+    public boolean isFinished() {
+        return this == SUCCEEDED || this == FAILED || this == CANCELLED;
+    }
 }

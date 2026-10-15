@@ -89,6 +89,24 @@ public final class TaskGraph {
                 .toList();
     }
 
+    /** Tasks currently in the given status, in topological order. */
+    public List<TaskNode> tasksIn(TaskStatus status) {
+        return topologicalOrder.stream().map(nodes::get).filter(n -> n.status() == status).toList();
+    }
+
+    public boolean any(TaskStatus status) {
+        return nodes.values().stream().anyMatch(n -> n.status() == status);
+    }
+
+    /**
+     * Restores a task's persisted status when the graph is rebuilt from the database (to resume a
+     * paused run). Bypasses the state machine because the persisted state was already validated
+     * when it was written.
+     */
+    public void restoreState(String taskId, TaskStatus status, int attempts) {
+        require(taskId).restore(status, attempts);
+    }
+
     /** Every task reachable downstream of {@code taskId} (not including it), in topological order. */
     public List<String> downstreamOf(String taskId) {
         require(taskId);
@@ -113,7 +131,7 @@ public final class TaskGraph {
     }
 
     public boolean hasFailures() {
-        return nodes.values().stream().anyMatch(n -> n.status() == TaskStatus.FAILED);
+        return any(TaskStatus.FAILED);
     }
 
     public TaskNode get(String taskId) {

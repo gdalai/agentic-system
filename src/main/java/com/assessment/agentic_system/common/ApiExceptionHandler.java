@@ -1,5 +1,7 @@
 package com.assessment.agentic_system.common;
 
+import com.assessment.agentic_system.governance.ApproverPolicy.ApprovalNotAuthorizedException;
+import com.assessment.agentic_system.orchestration.WorkflowConflictException;
 import com.assessment.agentic_system.orchestration.WorkflowNotFoundException;
 import com.assessment.agentic_system.shortener.CodeGenerator.CodeGenerationException;
 import com.assessment.agentic_system.shortener.UrlExceptions.UrlExpiredException;
@@ -25,6 +27,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(WorkflowNotFoundException.class)
     public ProblemDetail workflowNotFound(WorkflowNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Not found", ex.getMessage());
+    }
+
+    @ExceptionHandler(WorkflowConflictException.class)
+    public ProblemDetail workflowConflict(WorkflowConflictException ex) {
+        return problem(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
+    }
+
+    @ExceptionHandler(ApprovalNotAuthorizedException.class)
+    public ProblemDetail notAuthorized(ApprovalNotAuthorizedException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Not authorized", ex.getMessage());
     }
 
     @ExceptionHandler(UrlExpiredException.class)

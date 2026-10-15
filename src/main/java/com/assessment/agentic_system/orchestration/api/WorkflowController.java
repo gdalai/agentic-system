@@ -1,7 +1,9 @@
 package com.assessment.agentic_system.orchestration.api;
 
 import com.assessment.agentic_system.orchestration.WorkflowService;
+import com.assessment.agentic_system.orchestration.api.WorkflowDtos.ApprovalRequest;
 import com.assessment.agentic_system.orchestration.api.WorkflowDtos.EventView;
+import com.assessment.agentic_system.orchestration.api.WorkflowDtos.ReplanRequest;
 import com.assessment.agentic_system.orchestration.api.WorkflowDtos.TaskView;
 import com.assessment.agentic_system.orchestration.api.WorkflowDtos.WorkflowRequest;
 import com.assessment.agentic_system.orchestration.api.WorkflowDtos.WorkflowRunView;
@@ -53,5 +55,20 @@ public class WorkflowController {
     @GetMapping("/{runId}/events")
     public List<EventView> events(@PathVariable UUID runId) {
         return service.getEvents(runId).stream().map(EventView::from).toList();
+    }
+
+    /** Approve or reject a task parked at an approval gate. The run resumes in the background. */
+    @PostMapping("/{runId}/approvals")
+    public ResponseEntity<WorkflowRunView> decide(@PathVariable UUID runId, @Valid @RequestBody ApprovalRequest request) {
+        WorkflowRun run = service.decide(runId, request.taskId(), request.decision(), request.approver(),
+                request.reason());
+        return ResponseEntity.accepted().body(WorkflowRunView.from(run, service.getTasks(runId)));
+    }
+
+    /** Record a changed requirement and re-run only the tasks it invalidates. */
+    @PostMapping("/{runId}/replan")
+    public ResponseEntity<WorkflowRunView> replan(@PathVariable UUID runId, @Valid @RequestBody ReplanRequest request) {
+        WorkflowRun run = service.replan(runId, request.requirement(), request.fromTaskId(), request.reason());
+        return ResponseEntity.accepted().body(WorkflowRunView.from(run, service.getTasks(runId)));
     }
 }
